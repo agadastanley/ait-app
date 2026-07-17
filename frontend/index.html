@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>AiT — Run Inference</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div id="app">
+
+  <!-- Top bar -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">◆</span>
+      <span class="brand-name">AiT</span>
+    </div>
+    <div class="balance">
+      <span id="balance-value" class="gold">0</span>
+      <span class="unit">AiT</span>
+    </div>
+  </header>
+
+  <!-- Tab content -->
+  <main id="views">
+
+    <!-- MAIN / TAP VIEW -->
+    <section id="view-main" class="view active">
+      <div class="rank-line">
+        <span id="rank-label">Model Rank #—</span>
+      </div>
+
+      <div class="tap-core-wrap">
+        <div class="tap-core-orbit"></div>
+        <div class="tap-core-orbit reverse"></div>
+        <button id="tap-core" class="tap-core" aria-label="Run Inference">
+          <span class="tap-core-label">RUN<br/>INFERENCE</span>
+        </button>
+      </div>
+
+      <div class="energy-row">
+        <div class="energy-bar">
+          <div id="energy-fill" class="energy-fill"></div>
+        </div>
+        <div class="energy-text">
+          <span id="energy-value">0</span> / <span id="energy-max">0</span> GPU Power
+        </div>
+      </div>
+
+      <div class="stat-chip-row">
+        <div class="stat-chip">
+          <div class="stat-chip-label">Per Tap</div>
+          <div class="stat-chip-value" id="tap-value">+1</div>
+        </div>
+        <div class="stat-chip">
+          <div class="stat-chip-label">Passive/hr</div>
+          <div class="stat-chip-value" id="passive-value">0</div>
+        </div>
+        <div class="stat-chip">
+          <div class="stat-chip-label">Streak</div>
+          <div class="stat-chip-value" id="streak-value">0d</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- UPGRADES VIEW -->
+    <section id="view-upgrades" class="view">
+      <h2 class="view-title">Model Upgrades</h2>
+
+      <!-- Daily Weight Sync widget -->
+      <div id="weight-sync" class="weight-sync">
+        <div class="weight-sync-header">
+          <span class="weight-sync-title">Daily Weight Sync</span>
+          <span class="weight-sync-timer" id="ws-timer">--:--:--</span>
+        </div>
+        <div class="weight-sync-slots" id="ws-slots"></div>
+        <div class="weight-sync-bonus">
+          Find all 3 to win <span class="gold" id="ws-bonus">0</span> AiT
+        </div>
+      </div>
+
+      <div class="category-tabs" id="category-tabs"></div>
+      <div id="upgrades-list" class="upgrades-list"></div>
+    </section>
+
+    <!-- MISSIONS VIEW -->
+    <section id="view-missions" class="view">
+      <h2 class="view-title">Training Tasks</h2>
+      <div id="missions-list" class="missions-list"></div>
+    </section>
+
+    <!-- REFERRAL VIEW -->
+    <section id="view-referral" class="view">
+      <h2 class="view-title">Expand the Neural Network</h2>
+      <p class="view-sub">Invite friends — you both earn AiT compute credits.</p>
+      <div class="referral-card">
+        <div class="referral-count"><span id="referral-count">0</span> nodes connected</div>
+        <button id="copy-referral" class="btn-primary">Copy Invite Link</button>
+      </div>
+      <div id="invited-by" class="invited-by"></div>
+      <div id="referral-list" class="referral-list"></div>
+    </section>
+
+    <!-- LEADERBOARD VIEW -->
+    <section id="view-leaderboard" class="view">
+      <h2 class="view-title">Model Leaderboard</h2>
+      <div id="leaderboard-list" class="leaderboard-list"></div>
+    </section>
+
+  </main>
+
+  <!-- Bottom nav -->
+  <nav class="tabbar">
+    <button class="tab-btn active" data-view="view-main">Inference</button>
+    <button class="tab-btn" data-view="view-upgrades">Upgrades</button>
+    <button class="tab-btn" data-view="view-missions">Tasks</button>
+    <button class="tab-btn" data-view="view-referral">Network</button>
+    <button class="tab-btn" data-view="view-leaderboard">Ranks</button>
+  </nav>
+
+  <div id="toast" class="toast"></div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AiT Admin</title>
+<link rel="stylesheet" href="admin.css" />
+</head>
+<body>
+
+<!-- LOGIN SCREEN -->
+<div id="login-screen" class="login-screen">
+  <div class="login-card">
+    <h1>AiT Admin</h1>
+    <p class="sub">Restricted access</p>
+    <input id="login-username" type="text" placeholder="Username" autocomplete="username" />
+    <input id="login-password" type="password" placeholder="Password" autocomplete="current-password" />
+    <button id="login-btn" class="btn-primary">Log in</button>
+    <div id="login-error" class="error"></div>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div id="dashboard" class="dashboard hidden">
+  <header class="header">
+    <h1>AiT Admin</h1>
+    <button id="logout-btn" class="btn-secondary">Log out</button>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab-btn active" data-tab="stats">Overview</button>
+    <button class="tab-btn" data-tab="users">Users</button>
+    <button class="tab-btn" data-tab="missions">Missions</button>
+    <button class="tab-btn" data-tab="audit">Audit Log</button>
+  </nav>
+
+  <!-- STATS -->
+  <section id="tab-stats" class="tab-panel active">
+    <div class="stat-grid" id="stat-grid"></div>
+    <h3>Top Users</h3>
+    <table class="table" id="top-users-table"><tbody></tbody></table>
+  </section>
+
+  <!-- USERS -->
+  <section id="tab-users" class="tab-panel">
+    <div class="toolbar">
+      <input id="user-search" type="text" placeholder="Search by Telegram ID or username" />
+      <select id="user-status-filter">
+        <option value="">All statuses</option>
+        <option value="active">Active</option>
+        <option value="frozen">Frozen</option>
+        <option value="banned">Banned</option>
+      </select>
+      <button id="user-search-btn" class="btn-secondary">Search</button>
+    </div>
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Telegram ID</th><th>Username</th><th>Balance</th><th>Status</th><th>Referrals</th><th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="users-table-body"></tbody>
+    </table>
+  </section>
+
+  <!-- MISSIONS -->
+  <section id="tab-missions" class="tab-panel">
+    <p class="tab-note">The mission list itself is fixed — only the outbound destination link can be edited here (Telegram channel / X account), so it can be changed anytime without a redeploy.</p>
+    <table class="table">
+      <thead>
+        <tr><th>Title</th><th>Type</th><th>Reward</th><th>Current Link</th><th>Actions</th></tr>
+      </thead>
+      <tbody id="missions-table-body"></tbody>
+    </table>
+  </section>
+
+  <!-- AUDIT LOG -->
+  <section id="tab-audit" class="tab-panel">
+    <table class="table">
+      <thead><tr><th>When</th><th>Admin</th><th>Action</th><th>Target</th><th>Reason</th></tr></thead>
+      <tbody id="audit-table-body"></tbody>
+    </table>
+  </section>
+</div>
+
+<!-- MODAL: adjust balance / status -->
+<div id="modal-backdrop" class="modal-backdrop hidden">
+  <div class="modal" id="modal-content"></div>
+</div>
+
+<script src="admin.js"></script>
+</body>
+</html>
