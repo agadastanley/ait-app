@@ -10,6 +10,7 @@ if (tg) {
 }
 
 const initData = tg?.initData || '';
+const tgProfile = tg?.initDataUnsafe?.user || null;
 
 // ---- State ----
 let state = {
@@ -18,14 +19,23 @@ let state = {
   categories: [],
   activeCategory: 'compute',
   missions: [],
+  activeMissionCategory: 'social',
+  leaderboardBy: 'balance',
   leaderboard: [],
+  leaderboardMe: null,
   pendingTaps: 0,
   weightSync: null,
+  // Local energy-ticking state, synced from the server on every user update.
+  energyBase: 0,
+  energySyncedAt: Date.now(),
+  regenRatePerSec: 1,
 };
 
 let tapFlushTimer = null;
 let missionCountdownTimer = null;
 let weightSyncTimer = null;
+let energyTickTimer = null;
+let boostCountdownTimer = null;
 
 // ---- API helper ----
 async function api(path, opts = {}) {
@@ -57,21 +67,125 @@ function formatDuration(totalSeconds) {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
 }
 
-// ---- Render: user stats ----
+function avatarInnerHtml(photoUrl, name) {
+  if (photoUrl) return `<img src="${photoUrl}" alt="">`;
+  const initial = (name || '?').trim().charAt(0).toUpperCase() || '?';
+  return initial;
+}
+
+function avatarHtml(photoUrl, name, size) {
+  const cls = size === 'lg' ? 'avatar avatar-lg' : 'avatar avatar-sm';
+  return `<span class="${cls}">${avatarInnerHtml(photoUrl, name)}</span>`;
+}
+
+// ---- Render: profile header + user stats ----
 function renderUser() {
   const u = state.user;
   if (!u) return;
+
   document.getElementById('balance-value').textContent = Math.floor(u.balance).toLocaleString();
-  document.getElementById('energy-value').textContent = Math.floor(u.energy);
-  document.getElementById('energy-max').textContent = u.maxEnergy;
-  document.getElementById('energy-fill').style.width = `${(u.energy / u.maxEnergy) * 100}%`;
   document.getElementById('tap-value').textContent = `+${u.tapValue}`;
-  document.getElementById('passive-value').textContent = u.passiveRatePerHour;
+  document.getElementById('passive-value').textContent = Math.floor(u.passiveRatePerHour).toLocaleString();
   document.getElementById('streak-value').textContent = `${u.streakCount}d`;
-  document.getElementById('referral-count').textContent = u.referralCount;
+
+  const displayName = u.username || u.firstName || 'Node';
+  document.getElementById('profile-name').textContent = displayName;
+  document.getElementById('profile-avatar').innerHTML = avatarInnerHtml(u.photoUrl, displayName);
+
+  // Tier
+  const t = u.tier;
+  document.getElementById('tier-name').textContent = t.name;
+  document.getElementById('tier-fraction').textContent = `Tier ${t.number}/${t.totalTiers}`;
+  document.getElementById('tier-fill').style.width = `${Math.round(t.progress * 100)}%`;
+  document.getElementById('tier-amount-to-next').textContent = t.nextName
+    ? `${Math.floor(t.amountToNext).toLocaleString()} AiT to ${t.nextName}`
+    : 'Max tier reached';
+
+  // Energy re-sync (local ticking picks this up)
+  state.energyBase = u.energy;
+  state.energySyncedAt = Date.now();
+  state.regenRatePerSec = u.regenRatePerSec;
+  state.maxEnergy = u.maxEnergy;
+  renderEnergyDisplay();
+
+  renderBoosts();
 }
 
-// ---- Render: category tabs ----
+function renderEnergyDisplay() {
+  const elapsed = (Date.now() - state.energySyncedAt) / 1000;
+  const displayed = Math.min(state.maxEnergy, state.energyBase + elapsed * state.regenRatePerSec);
+  document.getElementById('energy-value').textContent = Math.floor(displayed);
+  document.getElementById('energy-max').textContent = state.maxEnergy;
+  document.getElementById('energy-fill').style.width = `${(displayed / state.maxEnergy) * 100}%`;
+}
+
+function startEnergyTicker() {
+  clearInterval(energyTickTimer);
+  energyTickTimer = setInterval(renderEnergyDisplay, 1000);
+}
+
+// ---- Render: quick boosts ----
+function renderBoosts() {
+  const u = state.user;
+  if (!u) return;
+  ['ten_min', 'one_hour'].forEach((id) => {
+    const b = u.boosts[id];
+    const btn = document.querySelector(`[data-boost="${id}"]`);
+    const stateEl = document.getElementById(`boost-${id}-state`);
+    if (b.active) {
+      stateEl.textContent = formatDuration(b.activeRemainingSeconds) + ' left';
+      btn.disabled = true;
+    } else if (!b.ready) {
+      stateEl.textContent = 'Cooldown ' + formatDuration(b.cooldownRemainingSeconds);
+      btn.disabled = true;
+    } else {
+      stateEl.textContent = 'Ready';
+      btn.disabled = false;
+    }
+  });
+
+  clearInterval(boostCountdownTimer);
+  boostCountdownTimer = setInterval(() => {
+    let changed = false;
+    ['ten_min', 'one_hour'].forEach((id) => {
+      const b = state.user?.boosts?.[id];
+      if (!b) return;
+      if (b.active && b.activeRemainingSeconds > 0) {
+        b.activeRemainingSeconds -= 1;
+        changed = true;
+        if (b.activeRemainingSeconds <= 0) loadBoosts();
+      } else if (!b.ready && b.cooldownRemainingSeconds > 0) {
+        b.cooldownRemainingSeconds -= 1;
+        changed = true;
+        if (b.cooldownRemainingSeconds <= 0) loadBoosts();
+      }
+    });
+    if (changed) renderBoosts();
+  }, 1000);
+}
+
+async function loadBoosts() {
+  try {
+    const data = await api('/boosts');
+    if (state.user) state.user.boosts = data;
+    renderBoosts();
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+async function activateBoost(id) {
+  try {
+    const data = await api(`/boosts/${id}/activate`, { method: 'POST' });
+    state.user = data.user;
+    renderUser();
+    showToast('Boost activated');
+  } catch (err) {
+    showToast(err.message);
+  }
+}
+
+// ---- Render: category tabs (Upgrades) ----
 function renderCategoryTabs() {
   const wrap = document.getElementById('category-tabs');
   wrap.innerHTML = '';
@@ -88,7 +202,7 @@ function renderCategoryTabs() {
   });
 }
 
-// ---- Render: upgrade cards (filtered by active category) ----
+// ---- Render: upgrade cards ----
 function renderUpgrades() {
   const list = document.getElementById('upgrades-list');
   list.innerHTML = '';
@@ -108,6 +222,9 @@ function renderUpgrades() {
           <div class="card-title">${up.name} ${synced ? '<span class="card-synced">SYNCED</span>' : ''}</div>
           <div class="card-sub">${up.description}</div>
           <div class="card-level">LV ${up.level}${up.maxLevel ? ' / ' + up.maxLevel : ''}</div>
+          <div class="card-pph">+${up.currentPPH.toLocaleString()} AiT/hr${
+        up.nextLevelPPH !== null ? ` → +${up.nextLevelPPH.toLocaleString()} AiT/hr next` : ' (max)'
+      }</div>
           ${onCooldown ? `<div class="card-cooldown" data-cooldown="${up.key}">Cooling down: ${formatDuration(up.cooldownRemainingSeconds)}</div>` : ''}
         </div>
         <button class="btn-primary" ${up.nextCost === null || onCooldown ? 'disabled' : ''} data-key="${up.key}">
@@ -122,8 +239,6 @@ function renderUpgrades() {
   startCooldownTicker();
 }
 
-// Ticks visible cooldown labels down locally between server refreshes, purely
-// for display — the server re-validates the real remaining time on every buy.
 function startCooldownTicker() {
   clearInterval(window._cooldownTickInterval);
   window._cooldownTickInterval = setInterval(() => {
@@ -135,7 +250,7 @@ function startCooldownTicker() {
         const el = document.querySelector(`[data-cooldown="${up.key}"]`);
         if (el) {
           if (up.cooldownRemainingSeconds <= 0) {
-            renderUpgrades(); // re-render so the button re-enables
+            renderUpgrades();
           } else {
             el.textContent = `Cooling down: ${formatDuration(up.cooldownRemainingSeconds)}`;
           }
@@ -146,24 +261,28 @@ function startCooldownTicker() {
   }, 1000);
 }
 
-// ---- Render: Daily Weight Sync widget ----
+// ---- Render: Daily Weight Sync (full widget + home mini widget) ----
 function renderWeightSync() {
   const ws = state.weightSync;
   if (!ws) return;
+
   const wrap = document.getElementById('weight-sync');
   wrap.classList.toggle('claimed', ws.claimed);
-
-  const slotsEl = document.getElementById('ws-slots');
-  slotsEl.innerHTML = ws.slots
+  document.getElementById('ws-slots').innerHTML = ws.slots
     .map((s) => (s.found ? `<div class="ws-slot found" title="${s.name}">${s.icon}</div>` : `<div class="ws-slot">?</div>`))
     .join('');
-
   document.getElementById('ws-bonus').textContent = ws.bonusAmount.toLocaleString();
+
+  document.getElementById('ws-mini-slots').innerHTML = ws.slots
+    .map((s) => (s.found ? `<div class="ws-mini-slot found">${s.icon}</div>` : `<div class="ws-mini-slot">?</div>`))
+    .join('');
 
   clearInterval(weightSyncTimer);
   const tick = () => {
     const remaining = (new Date(ws.activeUntil).getTime() - Date.now()) / 1000;
-    document.getElementById('ws-timer').textContent = remaining > 0 ? formatDuration(remaining) : '00:00:00';
+    const text = remaining > 0 ? formatDuration(remaining) : '00:00:00';
+    document.getElementById('ws-timer').textContent = text;
+    document.getElementById('ws-mini-timer').textContent = text;
   };
   tick();
   weightSyncTimer = setInterval(tick, 1000);
@@ -178,44 +297,65 @@ async function loadWeightSync() {
   }
 }
 
-// ---- Render: missions ----
-function renderMissions() {
+// ---- Render: missions (categorized) ----
+const MISSION_CATEGORY_LABELS = { social: 'Social', engagement: 'Engagement', verification: 'Verification', partner: 'Partner' };
+
+function renderMissionCategoryTabs() {
+  const cats = [...new Set(state.missions.map((m) => m.category))];
+  const wrap = document.getElementById('mission-category-tabs');
+  wrap.innerHTML = '';
+  cats.forEach((cat) => {
+    const btn = document.createElement('button');
+    btn.className = 'category-tab' + (cat === state.activeMissionCategory ? ' active' : '');
+    btn.textContent = MISSION_CATEGORY_LABELS[cat] || cat;
+    btn.addEventListener('click', () => {
+      state.activeMissionCategory = cat;
+      renderMissionCategoryTabs();
+      renderMissionsList();
+    });
+    wrap.appendChild(btn);
+  });
+  if (!cats.includes(state.activeMissionCategory) && cats.length) state.activeMissionCategory = cats[0];
+}
+
+function renderMissionsList() {
   const list = document.getElementById('missions-list');
   list.innerHTML = '';
-  state.missions.forEach((m) => {
-    const card = document.createElement('div');
-    card.className = 'card';
+  state.missions
+    .filter((m) => m.category === state.activeMissionCategory)
+    .forEach((m) => {
+      const card = document.createElement('div');
+      card.className = 'card';
 
-    let actionHtml;
-    if (m.completed) {
-      actionHtml = '<span class="badge-done">DONE</span>';
-    } else if (m.type === 'telegram_join' && m.started) {
-      actionHtml =
-        m.claimReadyInSeconds > 0
-          ? `<button class="btn-secondary" disabled data-countdown="${m.id}">${m.claimReadyInSeconds}s</button>`
-          : `<button class="btn-primary" data-claim="${m.id}">Claim</button>`;
-    } else if (m.type === 'telegram_join') {
-      actionHtml = `<button class="btn-primary" data-start="${m.id}">Start</button>`;
-    } else {
-      actionHtml = `<button class="btn-primary" data-claim="${m.id}">${m.type === 'daily_checkin' ? 'CLAIM' : 'GO'}</button>`;
-    }
+      let actionHtml;
+      if (m.completed) {
+        actionHtml = '<span class="badge-done">DONE</span>';
+      } else if (m.type === 'telegram_join' && m.started) {
+        actionHtml =
+          m.claimReadyInSeconds > 0
+            ? `<button class="btn-secondary" disabled data-countdown="${m.id}">${m.claimReadyInSeconds}s</button>`
+            : `<button class="btn-primary" data-claim="${m.id}">Claim</button>`;
+      } else if (m.type === 'telegram_join') {
+        actionHtml = `<button class="btn-primary" data-start="${m.id}">Start</button>`;
+      } else {
+        actionHtml = `<button class="btn-primary" data-claim="${m.id}">${m.type === 'daily_checkin' ? 'CLAIM' : 'GO'}</button>`;
+      }
 
-    card.innerHTML = `
-      <div class="card-main">
-        <div class="card-title">${m.title}</div>
-        <div class="card-sub">${m.description || ''} · <span class="gold">+${m.reward}</span> AiT</div>
-      </div>
-      ${actionHtml}
-    `;
+      card.innerHTML = `
+        <div class="card-main">
+          <div class="card-title">${m.title}</div>
+          <div class="card-sub">${m.description || ''} · <span class="gold">+${m.reward}</span> AiT</div>
+        </div>
+        ${actionHtml}
+      `;
 
-    const startBtn = card.querySelector('[data-start]');
-    if (startBtn) startBtn.addEventListener('click', () => startMission(m));
+      const startBtn = card.querySelector('[data-start]');
+      if (startBtn) startBtn.addEventListener('click', () => startMission(m));
+      const claimBtn = card.querySelector('[data-claim]');
+      if (claimBtn) claimBtn.addEventListener('click', () => completeMission(m));
 
-    const claimBtn = card.querySelector('[data-claim]');
-    if (claimBtn) claimBtn.addEventListener('click', () => completeMission(m));
-
-    list.appendChild(card);
-  });
+      list.appendChild(card);
+    });
 
   startMissionCountdownTicker();
 }
@@ -232,7 +372,7 @@ function startMissionCountdownTicker() {
         if (el) el.textContent = `${m.claimReadyInSeconds}s`;
       }
     });
-    if (needsReload) renderMissions();
+    if (needsReload) renderMissionsList();
   }, 1000);
 }
 
@@ -267,18 +407,56 @@ function renderLeaderboard() {
   list.innerHTML = '';
   state.leaderboard.forEach((row) => {
     const el = document.createElement('div');
-    el.className = 'leaderboard-row' + (row.username === state.user?.username ? ' me' : '');
+    const rankClass = row.rank <= 3 ? ` rank-${row.rank}` : '';
+    el.className = 'leaderboard-row' + rankClass;
     el.innerHTML = `
-      <span class="lb-rank">#${row.rank}</span>
+      <span class="lb-rank">${row.rank <= 3 ? ['🥇', '🥈', '🥉'][row.rank - 1] : '#' + row.rank}</span>
+      ${avatarHtml(row.photoUrl, row.username, 'sm')}
       <span class="lb-name">${row.username}</span>
-      <span class="lb-balance gold">${row.balance.toLocaleString()}</span>
+      <span class="lb-balance gold">${row.value.toLocaleString()}</span>
     `;
     list.appendChild(el);
   });
+
+  const meEl = document.getElementById('leaderboard-me');
+  if (state.leaderboardMe) {
+    const r = state.leaderboardMe;
+    const alreadyShown = state.leaderboard.some((row) => row.telegramId === r.telegramId);
+    meEl.innerHTML = alreadyShown
+      ? ''
+      : `
+      <div class="leaderboard-row me">
+        <span class="lb-rank">#${r.rank}</span>
+        ${avatarHtml(r.photoUrl, r.username, 'sm')}
+        <span class="lb-name">${r.username} (you)</span>
+        <span class="lb-balance gold">${r.value.toLocaleString()}</span>
+      </div>`;
+  }
+
+  // Tier card on Ranks screen mirrors the home tier panel
+  if (state.user) {
+    const t = state.user.tier;
+    document.getElementById('lb-tier-name').textContent = t.name;
+    document.getElementById('lb-tier-fraction').textContent = `Tier ${t.number}/${t.totalTiers}`;
+    document.getElementById('lb-tier-fill').style.width = `${Math.round(t.progress * 100)}%`;
+    document.getElementById('lb-tier-amount').textContent = t.nextName
+      ? `${Math.floor(t.amountToNext).toLocaleString()} AiT to ${t.nextName}`
+      : 'Max tier reached';
+  }
+}
+
+async function loadLeaderboard() {
+  const data = await api(`/leaderboard?by=${state.leaderboardBy}`);
+  state.leaderboard = data.leaderboard;
+  state.leaderboardMe = data.myRow;
+  renderLeaderboard();
 }
 
 // ---- Render: referral / network ----
 function renderReferral(data) {
+  document.getElementById('ref-total-nodes').textContent = data.totalNodes;
+  document.getElementById('ref-active-today').textContent = data.activeToday;
+  document.getElementById('ref-total-earned').textContent = data.totalEarnedFromNetwork.toLocaleString();
   document.getElementById('invited-by').textContent = data.invitedBy ? `Invited by: ${data.invitedBy}` : '';
 
   const list = document.getElementById('referral-list');
@@ -290,12 +468,26 @@ function renderReferral(data) {
     .map(
       (u) => `
     <div class="referral-row">
+      ${avatarHtml(u.photoUrl, u.username, 'sm')}
       <span class="name">${u.username}</span>
       <span class="tier">${u.tier}</span>
       <span class="contribution gold">${u.contribution.toLocaleString()}</span>
     </div>`
     )
     .join('');
+}
+
+// ---- Render: profile view ----
+function renderProfileView() {
+  const u = state.user;
+  if (!u) return;
+  const displayName = u.username || u.firstName || 'Node';
+  document.getElementById('profile-view-avatar').innerHTML = avatarInnerHtml(u.photoUrl, displayName);
+  document.getElementById('profile-view-name').textContent = displayName;
+  document.getElementById('profile-view-tier').textContent = `${u.tier.name} · Tier ${u.tier.number}/${u.tier.totalTiers}`;
+  document.getElementById('profile-lifetime').textContent = u.lifetimeEarned.toLocaleString();
+  document.getElementById('profile-streak').textContent = `${u.streakCount}d`;
+  document.getElementById('profile-referrals').textContent = u.referralCount;
 }
 
 // ---- Tap actions ----
@@ -310,12 +502,15 @@ function spawnFloater(x, y) {
 }
 
 function handleTap(e) {
-  if (!state.user || state.user.energy < 1) return;
+  const displayedEnergy = state.energyBase + ((Date.now() - state.energySyncedAt) / 1000) * state.regenRatePerSec;
+  if (!state.user || displayedEnergy < 1) return;
 
-  state.user.energy = Math.max(0, state.user.energy - 1);
+  state.energyBase = Math.max(0, displayedEnergy - 1);
+  state.energySyncedAt = Date.now();
   state.user.balance += state.user.tapValue;
   state.pendingTaps += 1;
-  renderUser();
+  document.getElementById('balance-value').textContent = Math.floor(state.user.balance).toLocaleString();
+  renderEnergyDisplay();
 
   const rect = e.currentTarget.getBoundingClientRect();
   const x = (e.touches?.[0]?.clientX ?? e.clientX) - rect.left + rect.left;
@@ -390,13 +585,8 @@ async function loadUpgrades() {
 async function loadMissions() {
   const data = await api('/missions');
   state.missions = data.missions;
-  renderMissions();
-}
-
-async function loadLeaderboard() {
-  const data = await api('/leaderboard');
-  state.leaderboard = data.leaderboard;
-  renderLeaderboard();
+  renderMissionCategoryTabs();
+  renderMissionsList();
 }
 
 async function loadReferral() {
@@ -416,6 +606,7 @@ function switchView(viewId) {
   if (viewId === 'view-missions') loadMissions();
   if (viewId === 'view-leaderboard') loadLeaderboard();
   if (viewId === 'view-referral') loadReferral();
+  if (viewId === 'view-profile') renderProfileView();
 }
 
 // ---- Init ----
@@ -423,13 +614,24 @@ async function init() {
   const urlParams = new URLSearchParams(window.location.search);
   const referralCode = urlParams.get('ref') || tg?.initDataUnsafe?.start_param;
 
-  // Attach navigation + tap listeners up front, so the app is never fully
-  // unresponsive even while we're still connecting or retrying below.
   document.getElementById('tap-core').addEventListener('click', handleTap);
   document.querySelectorAll('.tab-btn').forEach((btn) => {
     btn.addEventListener('click', () => switchView(btn.dataset.view));
   });
   document.getElementById('copy-referral').addEventListener('click', copyReferralLink);
+  document.getElementById('profile-btn').addEventListener('click', () => switchView('view-profile'));
+  document.getElementById('profile-back').addEventListener('click', () => switchView('view-main'));
+  document.getElementById('home-weight-sync').addEventListener('click', () => switchView('view-upgrades'));
+  document.querySelectorAll('.boost-btn').forEach((btn) => {
+    btn.addEventListener('click', () => activateBoost(btn.dataset.boost));
+  });
+  document.querySelectorAll('#leaderboard-tabs .category-tab').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.leaderboardBy = btn.dataset.lb;
+      document.querySelectorAll('#leaderboard-tabs .category-tab').forEach((b) => b.classList.toggle('active', b === btn));
+      loadLeaderboard();
+    });
+  });
 
   const core = document.getElementById('tap-core');
   const pulse = document.createElement('span');
@@ -437,18 +639,12 @@ async function init() {
   core.parentElement.appendChild(pulse);
 
   if (!initData) {
-    // This is the one case where "open this from the Telegram bot" is actually
-    // the correct diagnosis — there's no Telegram session at all (e.g. the raw
-    // Vercel URL was opened directly in a normal browser tab).
     showToast('Open this from the Telegram bot, not a direct link.');
     return;
   }
 
-  // Render's free tier spins down when idle — the first request after a
-  // while can take 30-60s. Retry with backoff instead of failing once and
-  // leaving the app looking dead; only show an error after real repeated failures.
   const MAX_ATTEMPTS = 6;
-  const DELAYS_MS = [0, 3000, 6000, 10000, 15000, 20000]; // ~54s total worst case
+  const DELAYS_MS = [0, 3000, 6000, 10000, 15000, 20000];
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     if (attempt > 0) {
@@ -462,6 +658,8 @@ async function init() {
       });
       state.user = data.user;
       renderUser();
+      startEnergyTicker();
+      loadWeightSync();
 
       setInterval(async () => {
         if (state.pendingTaps > 0) return;
@@ -474,7 +672,7 @@ async function init() {
         }
       }, 15000);
 
-      return; // connected successfully
+      return;
     } catch (err) {
       console.error(`[init] auth attempt ${attempt + 1} failed:`, err);
       if (attempt === MAX_ATTEMPTS - 1) {

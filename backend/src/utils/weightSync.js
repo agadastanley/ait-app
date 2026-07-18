@@ -95,4 +95,43 @@ async function getWeightSyncView(user) {
   };
 }
 
-module.exports = { getOrCreateCurrentCombo, applyUpgradeToWeightSync, getWeightSyncView };
+/**
+ * Admin view — returns today's actual combo (not hidden), with card names,
+ * for the admin dashboard's Weight Sync visibility section.
+ */
+async function getComboAdminView() {
+  const combo = await getOrCreateCurrentCombo();
+  return {
+    comboId: combo._id,
+    cardKeys: combo.cardKeys,
+    cardNames: combo.cardKeys.map((k) => UPGRADES[k]?.name || k),
+    bonusAmount: combo.bonusAmount,
+    activeUntil: combo.activeUntil,
+  };
+}
+
+/**
+ * Admin override — replaces today's combo with an admin-chosen set of 3 cards,
+ * keeping the same expiry window. User-side match detection and payout stay
+ * fully automatic; this only changes which 3 cards are the secret picks.
+ */
+async function overrideCombo(cardKeys) {
+  if (!Array.isArray(cardKeys) || cardKeys.length !== WEIGHT_SYNC_SLOT_COUNT) {
+    throw new Error(`Must provide exactly ${WEIGHT_SYNC_SLOT_COUNT} card keys`);
+  }
+  const invalid = cardKeys.filter((k) => !UPGRADES[k]);
+  if (invalid.length) throw new Error(`Unknown card key(s): ${invalid.join(', ')}`);
+
+  const current = await getOrCreateCurrentCombo();
+  current.cardKeys = cardKeys;
+  await current.save();
+  return current;
+}
+
+module.exports = {
+  getOrCreateCurrentCombo,
+  applyUpgradeToWeightSync,
+  getWeightSyncView,
+  getComboAdminView,
+  overrideCombo,
+};

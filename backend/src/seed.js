@@ -1,5 +1,5 @@
-// One-off script: populates a few starter missions.
-// Run locally or via Render's shell with: node src/seed.js
+// One-off script: populates starter missions across all 4 categories.
+// Run locally with: node src/seed.js
 require('dotenv').config();
 const connectDB = require('./config/db');
 const Mission = require('./models/Mission');
@@ -11,6 +11,7 @@ async function seed() {
     {
       title: 'Join the AiT Telegram Channel',
       description: 'Stay updated on new Model Upgrades and events',
+      category: 'social',
       type: 'telegram_join',
       url: 'https://t.me/your_ait_channel',
       reward: 500,
@@ -19,6 +20,7 @@ async function seed() {
     {
       title: 'Follow AiT on X',
       description: 'Follow for announcements',
+      category: 'social',
       type: 'x_follow',
       url: 'https://x.com/your_ait_handle',
       reward: 500,
@@ -27,6 +29,7 @@ async function seed() {
     {
       title: 'Invite 3 Friends',
       description: 'Expand the Neural Network',
+      category: 'engagement',
       type: 'invite_friends',
       url: '',
       reward: 1000,
@@ -35,10 +38,20 @@ async function seed() {
     {
       title: 'Daily Training Bonus',
       description: 'Check in daily to build your streak',
+      category: 'engagement',
       type: 'daily_checkin',
       url: '',
       reward: 0, // base reward comes from DAILY_BONUS_BASE + streak in gameConfig
       order: 4,
+    },
+    {
+      title: 'Connect Your Wallet',
+      description: 'Link a wallet for the upcoming token deployment (self-reported for now)',
+      category: 'verification',
+      type: 'wallet_connect',
+      url: '',
+      reward: 1000,
+      order: 5,
     },
   ];
 

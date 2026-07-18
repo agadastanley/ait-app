@@ -68,6 +68,7 @@ function switchTab(tabId) {
   if (tabId === 'stats') loadStats();
   if (tabId === 'users') loadUsers();
   if (tabId === 'missions') loadMissions();
+  if (tabId === 'weightsync') loadWeightSyncAdmin();
   if (tabId === 'audit') loadAuditLog();
 }
 
@@ -78,6 +79,7 @@ async function loadStats() {
   grid.innerHTML = `
     <div class="stat-card"><div class="label">Total Users</div><div class="value">${data.totalUsers.toLocaleString()}</div></div>
     <div class="stat-card"><div class="label">Active</div><div class="value">${data.activeUsers.toLocaleString()}</div></div>
+    <div class="stat-card"><div class="label">Daily Active</div><div class="value">${data.dailyActiveUsers.toLocaleString()}</div></div>
     <div class="stat-card"><div class="label">Banned</div><div class="value">${data.bannedUsers.toLocaleString()}</div></div>
     <div class="stat-card"><div class="label">AiT in Circulation</div><div class="value">${data.totalAiTInCirculation.toLocaleString()}</div></div>
   `;
@@ -86,6 +88,32 @@ async function loadStats() {
     .map((u) => `<tr><td>${u.telegramId}</td><td>${u.username || '—'}</td><td>${u.balance.toLocaleString()}</td></tr>`)
     .join('');
 }
+
+// ---- Weight Sync ----
+async function loadWeightSyncAdmin() {
+  const data = await api('/weight-sync');
+  const grid = document.getElementById('weightsync-current');
+  grid.innerHTML = data.cardKeys
+    .map(
+      (key, i) =>
+        `<div class="stat-card"><div class="label">Slot ${i + 1}</div><div class="value" style="font-size:14px;">${data.cardNames[i]}</div><div class="label">${key}</div></div>`
+    )
+    .join('');
+}
+
+document.getElementById('ws-override-btn')?.addEventListener('click', async () => {
+  const cardKeys = [
+    document.getElementById('ws-override-1').value.trim(),
+    document.getElementById('ws-override-2').value.trim(),
+    document.getElementById('ws-override-3').value.trim(),
+  ];
+  try {
+    await api('/weight-sync/override', { method: 'POST', body: JSON.stringify({ cardKeys }) });
+    loadWeightSyncAdmin();
+  } catch (err) {
+    alert(err.message);
+  }
+});
 
 // ---- Users ----
 async function loadUsers() {

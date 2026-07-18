@@ -31,6 +31,7 @@
     <button class="tab-btn active" data-tab="stats">Overview</button>
     <button class="tab-btn" data-tab="users">Users</button>
     <button class="tab-btn" data-tab="missions">Missions</button>
+    <button class="tab-btn" data-tab="weightsync">Weight Sync</button>
     <button class="tab-btn" data-tab="audit">Audit Log</button>
   </nav>
 
@@ -72,6 +73,19 @@
       </thead>
       <tbody id="missions-table-body"></tbody>
     </table>
+  </section>
+
+  <!-- WEIGHT SYNC -->
+  <section id="tab-weightsync" class="tab-panel">
+    <p class="tab-note">Today's secretly-chosen 3 cards. User-side matching and payout stay fully automatic — this is visibility plus an optional manual override.</p>
+    <div id="weightsync-current" class="stat-grid"></div>
+    <h3>Override Today's Cards</h3>
+    <div class="toolbar">
+      <input id="ws-override-1" type="text" placeholder="card key 1 (e.g. faster_inference)" />
+      <input id="ws-override-2" type="text" placeholder="card key 2" />
+      <input id="ws-override-3" type="text" placeholder="card key 3" />
+      <button id="ws-override-btn" class="btn-primary">Set</button>
+    </div>
   </section>
 
   <!-- AUDIT LOG -->

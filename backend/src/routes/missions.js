@@ -8,7 +8,7 @@ const {
   STREAK_RESET_HOURS,
   MISSION_CLAIM_DELAY_SECONDS,
 } = require('../utils/gameConfig');
-const { publicUserView } = require('../utils/gameLogic');
+const { publicUserView, applyEarning } = require('../utils/gameLogic');
 
 const router = express.Router();
 
@@ -55,6 +55,7 @@ router.get('/', telegramAuth, async (req, res) => {
       id: m._id,
       title: m.title,
       description: m.description,
+      category: m.category,
       type: m.type,
       url: m.url,
       reward: m.reward,
@@ -117,7 +118,7 @@ router.post('/:id/complete', telegramAuth, async (req, res) => {
       user.lastCheckInAt = new Date(now);
 
       const reward = DAILY_BONUS_BASE + (user.streakCount - 1) * DAILY_BONUS_PER_STREAK_DAY + mission.reward;
-      user.balance += reward;
+      applyEarning(user, reward);
       await user.save();
       return res.json({ user: publicUserView(user), rewardGranted: reward, streakCount: user.streakCount });
     }
@@ -158,7 +159,7 @@ router.post('/:id/complete', telegramAuth, async (req, res) => {
     }
 
     user.completedMissions.push({ missionId: mission._id, completedAt: new Date() });
-    user.balance += mission.reward;
+    applyEarning(user, mission.reward);
     if (user.missionProgress) user.missionProgress.delete(String(mission._id));
     await user.save();
 

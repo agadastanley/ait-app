@@ -4,6 +4,7 @@ const { UPGRADES, CATEGORIES } = require('../utils/gameConfig');
 const {
   getUpgradeEntry,
   getUpgradeCost,
+  getCardPPH,
   checkUpgradeCooldown,
   publicUserView,
 } = require('../utils/gameLogic');
@@ -13,8 +14,8 @@ const router = express.Router();
 
 /**
  * GET /api/upgrades
- * Returns the full 39-card upgrade tree (with per-user level/cost/cooldown),
- * plus the category list for rendering tabs.
+ * Returns the full 39-card upgrade tree with per-user level/cost/cooldown and
+ * each card's own PPH contribution (current level + what the next level adds).
  */
 router.get('/', telegramAuth, async (req, res) => {
   const user = req.user;
@@ -30,6 +31,9 @@ router.get('/', telegramAuth, async (req, res) => {
       level: entry.level,
       maxLevel: cfg.maxLevel,
       nextCost: entry.level >= cfg.maxLevel ? null : getUpgradeCost(key, entry.level),
+      currentPPH: getCardPPH(key, entry.level),
+      nextLevelPPH: entry.level >= cfg.maxLevel ? null : getCardPPH(key, entry.level + 1),
+      pphPerLevel: cfg.pphPerLevel,
       cooldownRemainingSeconds: cooldown.remainingSeconds,
     };
   });
@@ -38,19 +42,15 @@ router.get('/', telegramAuth, async (req, res) => {
 
 /**
  * GET /api/upgrades/weight-sync
- * Returns today's Daily Weight Sync widget state for this user (found/hidden
- * slots, bonus amount, time remaining) without revealing un-found cards.
  */
 router.get('/weight-sync', telegramAuth, async (req, res) => {
   const view = await getWeightSyncView(req.user);
-  await req.user.save(); // persist any combo-rotation reset from getWeightSyncView
+  await req.user.save();
   res.json(view);
 });
 
 /**
  * POST /api/upgrades/:key/buy
- * Deducts cost, increments level, enforces the escalating per-card cooldown,
- * and checks the purchase against today's Daily Weight Sync combo.
  */
 router.post('/:key/buy', telegramAuth, async (req, res) => {
   try {
@@ -78,7 +78,7 @@ router.post('/:key/buy', telegramAuth, async (req, res) => {
       return res.status(400).json({ error: 'Insufficient AiT balance', cost });
     }
 
-    user.balance -= cost;
+    user.balance -= cost; // spending never touches lifetimeEarned/tier
     if (!user.upgrades) user.upgrades = new Map();
     user.upgrades.set(key, {
       level: entry.level + 1,

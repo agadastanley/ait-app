@@ -4,6 +4,7 @@ const User = require('../models/User');
 const Mission = require('../models/Mission');
 const AuditLog = require('../models/AuditLog');
 const adminAuth = require('../middleware/adminAuth');
+const { getComboAdminView, overrideCombo } = require('../utils/weightSync');
 
 const router = express.Router();
 
@@ -238,10 +239,12 @@ router.delete('/missions/:id', async (req, res) => {
 // ---------- Stats ----------
 
 router.get('/stats', async (req, res) => {
-  const [totalUsers, activeUsers, bannedUsers, circulationAgg, topUsers] = await Promise.all([
+  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const [totalUsers, activeUsers, bannedUsers, dailyActiveUsers, circulationAgg, topUsers] = await Promise.all([
     User.countDocuments(),
     User.countDocuments({ status: 'active' }),
     User.countDocuments({ status: 'banned' }),
+    User.countDocuments({ lastActiveAt: { $gt: oneDayAgo } }),
     User.aggregate([{ $group: { _id: null, total: { $sum: '$balance' } } }]),
     User.find().sort({ balance: -1 }).limit(10).select('telegramId username balance'),
   ]);
@@ -250,6 +253,7 @@ router.get('/stats', async (req, res) => {
     totalUsers,
     activeUsers,
     bannedUsers,
+    dailyActiveUsers,
     totalAiTInCirculation: Math.floor(circulationAgg[0]?.total || 0),
     mostActiveUsers: topUsers.map((u) => ({
       telegramId: u.telegramId,
@@ -257,6 +261,35 @@ router.get('/stats', async (req, res) => {
       balance: Math.floor(u.balance),
     })),
   });
+});
+
+// ---------- Daily Weight Sync ----------
+
+/**
+ * GET /api/admin/weight-sync
+ * Shows today's actual 3 secretly-chosen cards (not hidden, unlike the user view).
+ */
+router.get('/weight-sync', async (req, res) => {
+  const view = await getComboAdminView();
+  res.json(view);
+});
+
+/**
+ * POST /api/admin/weight-sync/override
+ * Body: { cardKeys: [string, string, string] }
+ * Manually sets today's 3 secret cards. User-side detection/payout stay automatic.
+ */
+router.post('/weight-sync/override', async (req, res) => {
+  const { cardKeys } = req.body;
+  try {
+    const combo = await overrideCombo(cardKeys);
+    await logAction(req.admin.identifier, 'override_weight_sync', null, 'Manually set Weight Sync cards', {
+      cardKeys,
+    });
+    res.json({ comboId: combo._id, cardKeys: combo.cardKeys });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 // ---------- Audit log ----------

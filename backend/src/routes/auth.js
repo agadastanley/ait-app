@@ -3,7 +3,7 @@ const { nanoid } = require('nanoid');
 const User = require('../models/User');
 const { telegramAuth, verifyInitData } = require('../middleware/telegramAuth');
 const { REFERRAL_BONUS_REFERRER, REFERRAL_BONUS_REFEREE } = require('../utils/gameConfig');
-const { publicUserView, applyEnergyRegen, applyPassiveIncome } = require('../utils/gameLogic');
+const { publicUserView, applyEnergyRegen, applyPassiveIncome, applyEarning } = require('../utils/gameLogic');
 
 const router = express.Router();
 
@@ -33,6 +33,7 @@ router.post('/telegram', async (req, res) => {
         telegramId: String(tgUser.id),
         username: tgUser.username || '',
         firstName: tgUser.first_name || '',
+        photoUrl: tgUser.photo_url || '',
         referralCode: nanoid(8),
       });
 
@@ -40,18 +41,19 @@ router.post('/telegram', async (req, res) => {
         const referrer = await User.findOne({ referralCode });
         if (referrer && referrer.telegramId !== user.telegramId) {
           user.referredBy = referrer.telegramId;
-          user.balance += REFERRAL_BONUS_REFEREE;
+          applyEarning(user, REFERRAL_BONUS_REFEREE);
 
-          referrer.balance += REFERRAL_BONUS_REFERRER;
+          applyEarning(referrer, REFERRAL_BONUS_REFERRER);
           referrer.referralCount += 1;
           await referrer.save();
         }
       }
       await user.save();
     } else {
-      // Keep username/first name fresh in case the user changed it on Telegram.
+      // Keep profile fields fresh in case the user changed them on Telegram.
       user.username = tgUser.username || user.username;
       user.firstName = tgUser.first_name || user.firstName;
+      user.photoUrl = tgUser.photo_url || user.photoUrl;
     }
 
     if (user.status === 'banned') {

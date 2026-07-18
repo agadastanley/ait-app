@@ -1,24 +1,22 @@
 // All game-balance numbers live here so they can be tuned without touching route logic.
 
 // ---------------------------------------------------------------------------
-// Model Upgrades — 5 categories, ~8 cards each (Specials has 7), 39 cards total.
-// Each category maps to one derived stat so gameLogic.js can sum levels cleanly:
-//   compute      -> tapValue        ("Run Inference" gains per tap)
-//   architecture -> maxEnergy       ("GPU Power" capacity)
-//   infra        -> passiveRate     ("Background Training" AiT/hour)
-//   data         -> passiveRate     (dataset/training quality also feeds passive income)
-//   specials     -> tapValue        (flagship/prestige tier, larger per-level jumps)
+// Model Upgrades — 5 categories, ~8 cards each (39 total). Every card boosts
+// the SAME stat: passive AiT/hour ("profit per hour" / PPH). This matches how
+// Hamster Kombat / Dropee-style upgrade trees work — the upgrade tree is the
+// PPH engine; tap value and GPU Power capacity are simpler tier/base-driven
+// stats, not per-card. That's what lets every card show its own PPH and have
+// it visibly roll into the single aggregate Passive/Hr number.
 // ---------------------------------------------------------------------------
 
 const CATEGORIES = [
-  { key: 'compute', name: 'Compute', icon: '⚙️', effect: 'tapValue' },
-  { key: 'architecture', name: 'Architecture', icon: '🧠', effect: 'maxEnergy' },
-  { key: 'infra', name: 'Infra', icon: '🖧', effect: 'passiveRate' },
-  { key: 'data', name: 'Data', icon: '📊', effect: 'passiveRate' },
-  { key: 'specials', name: 'Specials', icon: '✦', effect: 'tapValue' },
+  { key: 'compute', name: 'Compute', icon: '⚙️' },
+  { key: 'architecture', name: 'Architecture', icon: '🧠' },
+  { key: 'infra', name: 'Infra', icon: '🖧' },
+  { key: 'data', name: 'Data', icon: '📊' },
+  { key: 'specials', name: 'Specials', icon: '✦' },
 ];
 
-// [key, name, description, icon]
 const CARD_LISTS = {
   compute: [
     ['faster_inference', 'Faster Inference', 'Increases AiT earned per tap', '⚡'],
@@ -65,7 +63,7 @@ const CARD_LISTS = {
     ['open_source_release', 'Open Source Release', 'Community-driven gains', '📖'],
     ['research_grant', 'Research Grant', 'Funded research boosts output', '💰'],
     ['community_fine_tune', 'Community Fine-Tune', 'Crowd-tuned performance gains', '👥'],
-    ['compute_grant', 'Compute Grant', 'Free compute, big per-tap boost', '🎁'],
+    ['compute_grant', 'Compute Grant', 'Free compute, big PPH boost', '🎁'],
     ['model_merge', 'Model Merge', 'Merged checkpoints, stacked gains', '🧷'],
     ['flagship_release', 'Flagship Release', 'The big one — flagship-tier output', '🚀'],
   ],
@@ -73,10 +71,10 @@ const CARD_LISTS = {
 
 function buildUpgrades() {
   const upgrades = {};
-  CATEGORIES.forEach(({ key: catKey, effect }) => {
+  CATEGORIES.forEach(({ key: catKey }) => {
     const cards = CARD_LISTS[catKey];
     cards.forEach(([key, name, description, icon], i) => {
-      const tier = i + 1; // 1-indexed position within the category
+      const tier = i + 1;
       const isSpecial = catKey === 'specials';
       upgrades[key] = {
         name,
@@ -85,10 +83,7 @@ function buildUpgrades() {
         category: catKey,
         baseCost: Math.round((isSpecial ? 5000 : 100) * Math.pow(1.6, tier - 1)),
         costMultiplier: isSpecial ? 1.22 : 1.15,
-        effect,
-        effectPerLevel: isSpecial
-          ? 5 * tier
-          : Math.max(1, Math.round((effect === 'maxEnergy' ? 30 : effect === 'passiveRate' ? 8 : 1) * (1 + tier * 0.15))),
+        pphPerLevel: isSpecial ? 400 * tier : Math.round(20 * (1 + tier * 0.2)), // AiT/hour added per level
         maxLevel: isSpecial ? 20 : 50,
       };
     });
@@ -97,6 +92,28 @@ function buildUpgrades() {
 }
 
 const UPGRADES = buildUpgrades();
+
+// ---------------------------------------------------------------------------
+// Tiers — driven by LIFETIME AiT earned (never decreases when the user
+// spends on upgrades), so tier reflects overall progress/prestige rather
+// than current spendable balance.
+// ---------------------------------------------------------------------------
+const TIER_NAMES = [
+  'Seed Model', 'Prototype', 'Alpha Build', 'Beta Release', 'Stable Checkpoint',
+  'Fine-Tuned', 'Optimized', 'Distilled', 'Multi-Modal', 'Instruction-Tuned',
+  'Reasoning Model', 'Long-Context', 'Mixture of Experts', 'Frontier Candidate', 'Frontier Model',
+  'State of the Art', 'Research Preview', 'Flagship', 'Superintelligent', 'AGI',
+];
+function buildTiers() {
+  let threshold = 0;
+  return TIER_NAMES.map((name, i) => {
+    const tier = { number: i + 1, name, threshold };
+    // Escalating thresholds — gentle early, steep later.
+    threshold = i === 0 ? 1000 : Math.round(threshold * 1.9 + 500);
+    return tier;
+  });
+}
+const TIERS = buildTiers();
 
 module.exports = {
   // --- Tap / Inference ---
@@ -107,11 +124,9 @@ module.exports = {
 
   CATEGORIES,
   UPGRADES,
+  TIERS,
 
   // --- Escalating per-card upgrade cooldowns (server-authoritative) ---
-  //   upgradeCount 0 (about to become 1st upgrade) -> no cooldown
-  //   upgradeCount 1 (about to become 2nd upgrade)  -> 1 minute
-  //   upgradeCount 2+ (3rd upgrade onward)          -> 5 minutes
   UPGRADE_COOLDOWN_SECONDS: {
     afterFirst: 60,
     afterSecondPlus: 300,
@@ -121,15 +136,15 @@ module.exports = {
   BASE_PASSIVE_RATE_PER_HOUR: 0,
   MAX_OFFLINE_HOURS: 3,
 
+  // --- Quick Boosts (Inference screen) — temporary PPH multipliers ---
+  BOOSTS: {
+    ten_min: { label: '10-Min Overdrive', durationSeconds: 600, cooldownSeconds: 2 * 60 * 60, multiplier: 2 },
+    one_hour: { label: '1-Hour Overdrive', durationSeconds: 3600, cooldownSeconds: 8 * 60 * 60, multiplier: 2 },
+  },
+
   // --- Referrals ("Expand the Neural Network") ---
   REFERRAL_BONUS_REFERRER: 500,
   REFERRAL_BONUS_REFEREE: 250,
-  REFERRAL_TIERS: [
-    { name: 'Node', min: 0 },
-    { name: 'Cluster', min: 10000 },
-    { name: 'Datacenter', min: 100000 },
-    { name: 'Frontier', min: 1000000 },
-  ],
 
   // --- Daily Training Bonus (login streaks) ---
   DAILY_BONUS_BASE: 100,
@@ -138,7 +153,8 @@ module.exports = {
   STREAK_RESET_HOURS: 48,
 
   // --- Missions ("Training Tasks") ---
-  MISSION_TYPES: ['telegram_join', 'x_follow', 'invite_friends', 'custom_link', 'daily_checkin'],
+  MISSION_TYPES: ['telegram_join', 'x_follow', 'invite_friends', 'wallet_connect', 'custom_link', 'daily_checkin'],
+  MISSION_CATEGORIES: ['social', 'engagement', 'verification', 'partner'],
   MISSION_CLAIM_DELAY_SECONDS: 45,
 
   // --- Daily Weight Sync ---

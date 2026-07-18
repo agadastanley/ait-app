@@ -1,16 +1,15 @@
 const express = require('express');
 const User = require('../models/User');
 const { telegramAuth } = require('../middleware/telegramAuth');
-const { getReferralTier } = require('../utils/gameLogic');
+const { getTierInfo } = require('../utils/gameLogic');
 
 const router = express.Router();
 
 /**
  * GET /api/referral/me
- * Returns this user's referral code/link, plus the full list of users they've
- * personally invited (queried by referredBy === this user's telegramId), each
- * with a display tier and their current balance as a rough "contribution" figure.
- * Also reports who invited *this* user, if anyone, for their own profile display.
+ * Returns invite link/code, aggregate network stats (total nodes, active
+ * today, total AiT earned across the whole network), and the full list of
+ * recruited nodes with avatar, tier, and individual contribution.
  */
 router.get('/me', telegramAuth, async (req, res) => {
   const user = req.user;
@@ -18,8 +17,12 @@ router.get('/me', telegramAuth, async (req, res) => {
   const link = botUsername ? `https://t.me/${botUsername}?startapp=${user.referralCode}` : null;
 
   const invited = await User.find({ referredBy: user.telegramId })
-    .select('telegramId username firstName balance createdAt')
+    .select('telegramId username firstName photoUrl lifetimeEarned lastActiveAt createdAt')
     .sort({ createdAt: -1 });
+
+  const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+  const activeToday = invited.filter((u) => new Date(u.lastActiveAt).getTime() > oneDayAgo).length;
+  const totalEarnedFromNetwork = invited.reduce((sum, u) => sum + (u.lifetimeEarned || 0), 0);
 
   let invitedByUsername = null;
   if (user.referredBy) {
@@ -30,13 +33,16 @@ router.get('/me', telegramAuth, async (req, res) => {
   res.json({
     referralCode: user.referralCode,
     referralLink: link,
-    referralCount: user.referralCount,
+    totalNodes: invited.length,
+    activeToday,
+    totalEarnedFromNetwork: Math.floor(totalEarnedFromNetwork),
     invitedBy: invitedByUsername,
     invited: invited.map((u) => ({
       telegramId: u.telegramId,
       username: u.username || u.firstName || `User ${u.telegramId.slice(-4)}`,
-      tier: getReferralTier(u.balance),
-      contribution: Math.floor(u.balance),
+      photoUrl: u.photoUrl || '',
+      tier: getTierInfo(u.lifetimeEarned || 0).name,
+      contribution: Math.floor(u.lifetimeEarned || 0),
       joinedAt: u.createdAt,
     })),
   });

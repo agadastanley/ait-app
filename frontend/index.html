@@ -14,10 +14,10 @@
 
   <!-- Top bar -->
   <header class="topbar">
-    <div class="brand">
-      <span class="brand-mark">◆</span>
-      <span class="brand-name">AiT</span>
-    </div>
+    <button id="profile-btn" class="profile-btn">
+      <span id="profile-avatar" class="avatar avatar-sm"></span>
+      <span id="profile-name" class="profile-name">—</span>
+    </button>
     <div class="balance">
       <span id="balance-value" class="gold">0</span>
       <span class="unit">AiT</span>
@@ -64,13 +64,46 @@
           <div class="stat-chip-value" id="streak-value">0d</div>
         </div>
       </div>
+
+      <!-- Combined panel: tier progress + weight sync mini + quick boosts -->
+      <div class="home-panel">
+        <div class="panel-block">
+          <div class="panel-row-header">
+            <span id="tier-name" class="tier-name">Seed Model</span>
+            <span id="tier-fraction" class="tier-fraction">Tier 1/20</span>
+          </div>
+          <div class="tier-bar"><div id="tier-fill" class="tier-fill"></div></div>
+          <div id="tier-amount-to-next" class="tier-sub">— AiT to next tier</div>
+        </div>
+
+        <button id="home-weight-sync" class="panel-block panel-block-btn">
+          <div class="panel-row-header">
+            <span class="ws-mini-title">Daily Weight Sync</span>
+            <span id="ws-mini-timer" class="ws-mini-timer">--:--:--</span>
+          </div>
+          <div id="ws-mini-slots" class="ws-mini-slots"></div>
+        </button>
+
+        <div class="panel-block">
+          <div class="panel-row-header"><span class="boost-title">Quick Boosts</span></div>
+          <div class="boost-row">
+            <button class="boost-btn" data-boost="ten_min">
+              <span class="boost-btn-label">10-Min x2</span>
+              <span class="boost-btn-state" id="boost-ten_min-state">Ready</span>
+            </button>
+            <button class="boost-btn" data-boost="one_hour">
+              <span class="boost-btn-label">1-Hour x2</span>
+              <span class="boost-btn-state" id="boost-one_hour-state">Ready</span>
+            </button>
+          </div>
+        </div>
+      </div>
     </section>
 
     <!-- UPGRADES VIEW -->
     <section id="view-upgrades" class="view">
       <h2 class="view-title">Model Upgrades</h2>
 
-      <!-- Daily Weight Sync widget -->
       <div id="weight-sync" class="weight-sync">
         <div class="weight-sync-header">
           <span class="weight-sync-title">Daily Weight Sync</span>
@@ -89,6 +122,7 @@
     <!-- MISSIONS VIEW -->
     <section id="view-missions" class="view">
       <h2 class="view-title">Training Tasks</h2>
+      <div class="category-tabs" id="mission-category-tabs"></div>
       <div id="missions-list" class="missions-list"></div>
     </section>
 
@@ -96,9 +130,14 @@
     <section id="view-referral" class="view">
       <h2 class="view-title">Expand the Neural Network</h2>
       <p class="view-sub">Invite friends — you both earn AiT compute credits.</p>
+
       <div class="referral-card">
-        <div class="referral-count"><span id="referral-count">0</span> nodes connected</div>
         <button id="copy-referral" class="btn-primary">Copy Invite Link</button>
+        <div class="referral-stats-row">
+          <div class="referral-stat"><div class="referral-stat-value" id="ref-total-nodes">0</div><div class="referral-stat-label">Total Nodes</div></div>
+          <div class="referral-stat"><div class="referral-stat-value" id="ref-active-today">0</div><div class="referral-stat-label">Active Today</div></div>
+          <div class="referral-stat"><div class="referral-stat-value gold" id="ref-total-earned">0</div><div class="referral-stat-label">Network AiT</div></div>
+        </div>
       </div>
       <div id="invited-by" class="invited-by"></div>
       <div id="referral-list" class="referral-list"></div>
@@ -107,7 +146,39 @@
     <!-- LEADERBOARD VIEW -->
     <section id="view-leaderboard" class="view">
       <h2 class="view-title">Model Leaderboard</h2>
+
+      <div class="home-panel" style="margin-bottom:16px;">
+        <div class="panel-block">
+          <div class="panel-row-header">
+            <span id="lb-tier-name" class="tier-name">Seed Model</span>
+            <span id="lb-tier-fraction" class="tier-fraction">Tier 1/20</span>
+          </div>
+          <div class="tier-bar"><div id="lb-tier-fill" class="tier-fill"></div></div>
+          <div id="lb-tier-amount" class="tier-sub">— AiT to next tier</div>
+        </div>
+      </div>
+
+      <div class="category-tabs" id="leaderboard-tabs">
+        <button class="category-tab active" data-lb="balance">Top Holders</button>
+        <button class="category-tab" data-lb="pph">Top Earners</button>
+      </div>
       <div id="leaderboard-list" class="leaderboard-list"></div>
+      <div id="leaderboard-me" class="leaderboard-me"></div>
+    </section>
+
+    <!-- PROFILE VIEW -->
+    <section id="view-profile" class="view">
+      <button id="profile-back" class="btn-secondary" style="margin-bottom:16px;">← Back</button>
+      <div class="profile-header-card">
+        <span id="profile-view-avatar" class="avatar avatar-lg"></span>
+        <div id="profile-view-name" class="profile-view-name">—</div>
+        <div id="profile-view-tier" class="profile-view-tier">—</div>
+      </div>
+      <div class="upgrades-list">
+        <div class="card"><div class="card-main"><div class="card-title">Lifetime AiT Earned</div></div><div class="card-level gold" id="profile-lifetime">0</div></div>
+        <div class="card"><div class="card-main"><div class="card-title">Current Streak</div></div><div class="card-level gold" id="profile-streak">0d</div></div>
+        <div class="card"><div class="card-main"><div class="card-title">Referrals</div></div><div class="card-level gold" id="profile-referrals">0</div></div>
+      </div>
     </section>
 
   </main>

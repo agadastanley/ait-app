@@ -1,7 +1,7 @@
 const express = require('express');
 const { telegramAuth } = require('../middleware/telegramAuth');
 const { tapLimiter } = require('../middleware/rateLimiter');
-const { applyEnergyRegen, getTapValue, publicUserView } = require('../utils/gameLogic');
+const { applyEnergyRegen, getTapValue, applyEarning, publicUserView } = require('../utils/gameLogic');
 
 const router = express.Router();
 
@@ -34,7 +34,7 @@ router.post('/', telegramAuth, tapLimiter, async (req, res) => {
 
     const tapValue = getTapValue(user);
     user.energy -= affordableTaps;
-    user.balance += affordableTaps * tapValue;
+    applyEarning(user, affordableTaps * tapValue);
     user.lastActiveAt = new Date();
 
     await user.save();

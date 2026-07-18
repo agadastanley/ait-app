@@ -9,6 +9,7 @@ const upgradeRoutes = require('./routes/upgrades');
 const missionRoutes = require('./routes/missions');
 const referralRoutes = require('./routes/referral');
 const leaderboardRoutes = require('./routes/leaderboard');
+const boostsRoutes = require('./routes/boosts');
 const adminRoutes = require('./routes/admin');
 
 const app = express();
@@ -37,6 +38,7 @@ app.use('/api/upgrades', upgradeRoutes);
 app.use('/api/missions', missionRoutes);
 app.use('/api/referral', referralRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
+app.use('/api/boosts', boostsRoutes);
 app.use('/api/admin', adminRoutes);
 
 app.use((req, res) => res.status(404).json({ error: 'Not found' }));
